@@ -193,6 +193,9 @@ criterion = nn.L1Loss()
 optimiser = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.01)
 
 scheduler = None
+best_val_loss = float('inf')
+epochs_without_improvement = 0
+patience = 5
 
 model.train()
 for epoch in range(NUM_EPOCHS):
@@ -238,6 +241,18 @@ for epoch in range(NUM_EPOCHS):
 
     avg_eval_loss = total_eval_loss / len(test_loader)
     print(f"Epoch {epoch+1}/{NUM_EPOCHS} | Validation Loss: {avg_eval_loss:.4f}")
+    if avg_eval_loss < best_val_loss:
+        best_val_loss = avg_eval_loss
+        best_model_state = model.state_dict()
+        epochs_without_improvement = 0
+    else:
+        epochs_without_improvement += 1
+        if epochs_without_improvement >= patience:
+            print(f"Early stopping triggered after {epoch + 1} epochs.")
+            break
+
+if best_model_state:
+    model.load_state_dict(best_model_state)
 
 # Save results
 with open("transformer_model_result.txt", "w") as f:
