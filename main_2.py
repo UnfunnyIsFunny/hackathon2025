@@ -188,7 +188,7 @@ if __name__ == '__main__':
 
                     outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     total_val_loss += outputs.loss.item()
-            avg_val_loss = total_val_loss / len(test_loader)
+            avg_val_loss = total_val_loss / len(val_loader)
             print(f"Epoch {fold + 1} - Validation Loss: {avg_val_loss:.4f}")
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
@@ -219,10 +219,11 @@ if __name__ == '__main__':
             attention_mask = batch['attention_mask'].to(DEVICE)
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            total_val_loss += outputs.loss.item()
             logits = outputs.logits
             preds = torch.argmax(logits, dim=1)
             predictions.extend(preds.cpu().numpy())
-
+    print(f"Test loss was {total_vas_los / len(test_loader)}")
     with open("result.txt", "w") as f:
         for pred in predictions:
             f.write(f"{pred}\n")
