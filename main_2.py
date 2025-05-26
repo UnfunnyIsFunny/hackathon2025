@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    BATCH_SIZE = 1
+    BATCH_SIZE = 64
     NUM_EPOCHS = 3
 
     # Load and prepare data
