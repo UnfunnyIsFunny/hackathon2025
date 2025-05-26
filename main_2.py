@@ -121,6 +121,21 @@ if __name__ == '__main__':
 
         )
         best_val_loss = float('inf')
+        class_counts = y_train.value_counts().sort_index()
+
+        num_samples = len(y_train)
+        num_classes = len(train_dataset.label_map)  # Use num_classes from your dataset's label_map
+        labels_for_weights = y_train.map(train_dataset.label_map)  # Map to indices
+        class_sample_counts = torch.tensor(
+            [labels_for_weights[labels_for_weights == i].size(0) for i in range(num_classes)],
+            dtype=torch.float
+        )
+
+        weights = 1.0 / class_sample_counts
+        weights = weights / weights.sum()  # Normalize (optional, but can help)
+        weights = weights.to(DEVICE)
+        print(f"Fold {fold + 1} Class Weights: {weights}")
+        criterion = nn.CrossEntropyLoss(weight=weights)
 
         for epoch in range(NUM_EPOCHS):
             model.train()
