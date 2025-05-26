@@ -11,6 +11,9 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from transformers import BertTokenizer
+
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -28,43 +31,39 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 # TODO: Fill out the ReviewDataset
 class ReviewDataset(Dataset):
-    def __init__(self, data_frame):
-         #self.id = data_frame['ID']
-         #self.label = data_frame['Label']
-         self.statement = data_frame['Statement']
-         self.subjects = data_frame['Subjects']
-         self.speaker_name = data_frame['Speaker Name']
-         self.speaker_title = data_frame['Speaker Title']
-         self.state = data_frame['State']
-         self.party_affiliation = data_frame['Party Affiliation']
-         self.credit_history_bt = data_frame['Credit History: barely-true']
-         self.credit_history_f = data_frame['Credit History: false']
-         self.credit_history_ht = data_frame['Credit History: half-true']
-         self.credit_history_mt = data_frame['Credit History: mostly-true']
-         self.credit_history_pf = data_frame['Credit History: pants-fire']
-         self.cl = data_frame['Context/Location']
+    def __init__(self, df, labels, tokenizer, max_len=128):
+        self.texts = [
+            f"{row['Statement']} [SEP] {row['Subjects']} [SEP] "
+            f"{row['Speaker Name']}, {row['Speaker Title']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
+            f"Context: {row['Context/Location']} [SEP] "
+            f"Credit: BT={row['Credit History: barely-true']}, F={row['Credit History: false']}, HT={row['Credit History: half-true']}, "
+            f"MT={row['Credit History: mostly-true']}, PF={row['Credit History: pants-fire']}"
+            for _, row in df.iterrows()
+        ]
+
+        self.encodings = tokenizer(
+            self.texts,
+            padding=True,
+            truncation=True,
+            max_length=max_len,
+            return_tensors='pt'
+        )
+
+        self.label_map = {label: idx for idx, label in enumerate(sorted(set(labels)))}
+        self.labels = torch.tensor([self.label_map[label] for label in labels])
+
     def __len__(self):
-         return len(self.statement)
+        return len(self.labels)
 
     def __getitem__(self, index):
-        #label = self.label.iloc[index]
-        statement = self.statement.iloc[index]
-        subjects = self.subjects.iloc[index]
-        speaker_name = self.speaker_name.iloc[index]
-        speaker_title = self.speaker_title.iloc[index]
-        state = self.state.iloc[index]
-        party_affiliation = self.party_affiliation.iloc[index]
-        credit_history_bt = self.credit_history_bt.iloc[index]
-        credit_history_f = self.credit_history_f.iloc[index]
-        credit_history_ht = self.credit_history_ht.iloc[index]
-        credit_history_mt = self.credit_history_mt.iloc[index]
-        credit_history_pf = self.credit_history_pf.iloc[index]
-        cl = self.cl.iloc[index]
-        return statement, subjects, speaker_name, speaker_title, state, party_affiliation,credit_history_bt,credit_history_f,credit_history_ht,credit_history_mt,credit_history_pf,cl
+        item = {key: val[index] for key, val in self.encodings.items()}
+        item['labels'] = self.labels[index]
+        return item
+        
 
 
-train_dataset = ReviewDataset(X_train)
-test_dataset = ReviewDataset(X_test)
+train_dataset = ReviewDataset(X_train, y_train, tokenizer)
+test_dataset = ReviewDataset(X_test, y_test, tokenizer)
 
 train_loader = DataLoader(dataset=train_dataset,
                           batch_size=BATCH_SIZE,
@@ -110,18 +109,18 @@ class MyModule(nn.Module):
         self.activation = nn.Identity()
 
 
-def forward(self, x):
-    x1 = self.enc1(x)
-    x2 = self.enc2(self.pool1(x1))
-    x3 = self.bottleneck(self.pool2(x2))
+    def forward(self, x):
+        x1 = self.enc1(x)
+        x2 = self.enc2(self.pool1(x1))
+        x3 = self.bottleneck(self.pool2(x2))
 
-    x = self.up1(x3)
-    x = self.dec1(torch.cat([x, x2], dim=1))
-    x = self.up2(x)
-    x = self.dec2(torch.cat([x, x1], dim=1))
+        x = self.up1(x3)
+        x = self.dec1(torch.cat([x, x2], dim=1))
+        x = self.up2(x)
+        x = self.dec2(torch.cat([x, x1], dim=1))
 
-    x = self.final(x)
-    return self.activation(x)
+        x = self.final(x)
+        return self.activation(x)
 
 
 model = MyModule().to(DEVICE)
