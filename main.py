@@ -11,10 +11,19 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from transformers import BertTokenizer
+from transformers import BertTokenizer, AutoModel
+
+MODEL_NAME = 'distilbert-base-uncased'
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-
+label_mapping = {
+    "pants-fire": 0,
+    "false": 1,
+    "barely-true": 2,
+    "half-true": 3,
+    "mostly-true": 4,
+    "true": 5
+}
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 1  # TODO: Set the batch size according to both training performance and available memory
@@ -28,6 +37,9 @@ y = data.iloc[:, 0]
 X = data.iloc[:, 1:]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+y_train = y_train.map(label_mapping).astype(np.float32)
+y_test = y_test.map(label_mapping).astype(np.float32)
 
 # TODO: Fill out the ReviewDataset
 class ReviewDataset(Dataset):
@@ -59,18 +71,62 @@ class ReviewDataset(Dataset):
         item = {key: val[index] for key, val in self.encodings.items()}
         item['labels'] = self.labels[index]
         return item
-        
+
+import torch
+from torch.utils.data import Dataset
+import numpy as np # For label processing if needed
+
+# Assuming your label mapping is still relevant for L1Loss
+# label_mapping = { "pants-fire": 0.0, "false": 1.0, ..., "true": 5.0 }
+# y_train_numeric = y_train.map(label_mapping).astype(np.float32)
+# y_test_numeric = y_test.map(label_mapping).astype(np.float32)
+# Ensure y_train_numeric and y_test_numeric are available and are pandas Series or NumPy arrays
+
+class TransformerTextDataset(Dataset):
+    def __init__(self, texts_series, labels_array, tokenizer, max_len=128):
+        self.texts = texts_series.astype(str).tolist() # Ensure texts are strings
+        self.labels = labels_array # Should be a NumPy array of numerical labels
+        self.tokenizer = tokenizer
+        self.max_len = max_len
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, index):
+        text = self.texts[index]
+        label = self.labels[index]
+
+        encoding = self.tokenizer.encode_plus(
+            text,
+            add_special_tokens=True,    # Add '[CLS]' and '[SEP]'
+            max_length=self.max_len,    # Max sequence length
+            return_token_type_ids=False,# Not needed for DistilBERT/BERT for sentence tasks
+            padding='max_length',       # Pad to max_length
+            truncation=True,            # Truncate to max_length if longer
+            return_attention_mask=True, # Create attention mask
+            return_tensors='pt',        # Return PyTorch tensors
+        )
+
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'labels': torch.tensor(label, dtype=torch.float32) # Ensure label is a tensor
+        }
 
 
-train_dataset = ReviewDataset(X_train, y_train, tokenizer)
-test_dataset = ReviewDataset(X_test, y_test, tokenizer)
+# train_loader = DataLoader(dataset=train_dataset,
+#                           batch_size=BATCH_SIZE,
+#                           shuffle=True, num_workers=16, pin_memory=True)
+# test_loader = DataLoader(dataset=test_dataset,
+#                          batch_size=BATCH_SIZE,
+#                          shuffle=False, num_workers=16, pin_memory=True)
+#
+train_dataset_hf = TransformerTextDataset(X_train['Statement'], y_train.values, tokenizer, max_len=128)
 
-train_loader = DataLoader(dataset=train_dataset,
-                          batch_size=BATCH_SIZE,
-                          shuffle=True, num_workers=16, pin_memory=True)
-test_loader = DataLoader(dataset=test_dataset,
-                         batch_size=BATCH_SIZE,
-                         shuffle=False, num_workers=16, pin_memory=True)
+test_dataset_hf = TransformerTextDataset(X_test['Statement'], y_test.values, tokenizer, max_len=128)
+
+train_loader = DataLoader(train_dataset_hf, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+test_loader = DataLoader(test_dataset_hf, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
 # Additional code if needed
 class UNetBlock(nn.Module):
@@ -89,44 +145,51 @@ class UNetBlock(nn.Module):
         return self.conv(x)
 
 # TODO: Fill out MyModule
-class MyModule(nn.Module):
-    def __init__(self):
+import torch.nn as nn
+
+
+class TransformerRegressor(nn.Module):
+    def __init__(self, model_name, output_dim=1, dropout_rate=0.1):
         super().__init__()
+        # Load the pre-trained base model (without a specific head)
+        self.transformer = AutoModel.from_pretrained(model_name)
 
-        self.enc1 = UNetBlock(1, 32)
-        self.pool1 = nn.MaxPool2d(2)
-        self.enc2 = UNetBlock(32, 64)
-        self.pool2 = nn.MaxPool2d(2)
+        # Dropout layer
+        self.dropout = nn.Dropout(dropout_rate)
 
-        self.bottleneck = UNetBlock(64, 128)
+        # The regressor head
+        # self.transformer.config.dim is the hidden size of DistilBERT's [CLS] token embedding
+        self.regressor = nn.Linear(self.transformer.config.dim, output_dim)
 
-        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.dec1 = UNetBlock(128, 64)
-        self.up2 = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
-        self.dec2 = UNetBlock(64, 32)
+    def forward(self, input_ids, attention_mask):
+        # Pass inputs through the transformer model
+        # The output is an object, for DistilBERT, .last_hidden_state is what we need
+        transformer_output = self.transformer(
+            input_ids=input_ids,
+            attention_mask=attention_mask
+        )
 
-        self.final = nn.Conv2d(32, 1, kernel_size=1)
-        self.activation = nn.Identity()
+        # Get the last hidden state
+        last_hidden_state = transformer_output.last_hidden_state
+        # last_hidden_state shape: (batch_size, sequence_length, hidden_size)
+
+        # For sentence-level tasks, we typically use the representation of the [CLS] token,
+        # which is the first token in the sequence.
+        cls_token_representation = last_hidden_state[:, 0, :]  # (batch_size, hidden_size)
+
+        # Apply dropout
+        pooled_output = self.dropout(cls_token_representation)
+
+        # Pass through the regressor head
+        return self.regressor(pooled_output)
 
 
-    def forward(self, x):
-        x1 = self.enc1(x)
-        x2 = self.enc2(self.pool1(x1))
-        x3 = self.bottleneck(self.pool2(x2))
+# Instantiate the model
+model = TransformerRegressor(MODEL_NAME, output_dim=1).to(DEVICE) # output_dim=1 for single value regression
 
-        x = self.up1(x3)
-        x = self.dec1(torch.cat([x, x2], dim=1))
-        x = self.up2(x)
-        x = self.dec2(torch.cat([x, x1], dim=1))
-
-        x = self.final(x)
-        return self.activation(x)
-
-
-model = MyModule().to(DEVICE)
 
 # TODO: Setup loss function, optimiser, and scheduler
-criterion = nn.L1Loss
+criterion = nn.L1Loss()
 optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
 
 scheduler = None
@@ -134,20 +197,49 @@ scheduler = None
 model.train()
 for epoch in range(NUM_EPOCHS):
     model.train()
+    total_loss = 0
     for batch in tqdm(train_loader, total=len(train_loader)):
-        batch = batch.to(DEVICE)
+        # Move batch to device
+        input_ids = batch['input_ids'].to(DEVICE)
+        attention_mask = batch['attention_mask'].to(DEVICE)
+        labels = batch['labels'].to(DEVICE)
 
-        # TODO: Set up training loop
+        optimiser.zero_grad()
 
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+        # Ensure output shape matches label shape (e.g., [batch_size] vs [batch_size])
+        loss = criterion(outputs.squeeze(1), labels) # .squeeze(1) if output_dim is 1
 
-model.eval()
-with torch.no_grad():
-    results = []
-    for batch in tqdm(test_loader, total=len(test_loader)):
-        batch = batch.to(DEVICE)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0) # Gradient clipping
+        optimiser.step()
+        #scheduler.step() # Update learning rate
 
-        # TODO: Set up evaluation loop
+        total_loss += loss.item()
 
-    with open("result.txt", "w") as f:
-        for val in np.concatenate(results):
-            f.write(f"{val}\n")
+    avg_train_loss = total_loss / len(train_loader)
+    print(f"Epoch {epoch+1}/{NUM_EPOCHS} | Train Loss: {avg_train_loss:.4f}")
+
+    # Evaluation
+    model.eval()
+    total_eval_loss = 0
+    all_predictions = []
+    with torch.no_grad():
+        for batch in tqdm(test_loader, total=len(test_loader)):
+            input_ids = batch['input_ids'].to(DEVICE)
+            attention_mask = batch['attention_mask'].to(DEVICE)
+            labels = batch['labels'].to(DEVICE)
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            loss = criterion(outputs.squeeze(1), labels)
+
+            total_eval_loss += loss.item()
+            all_predictions.extend(outputs.squeeze(1).cpu().numpy())
+
+    avg_eval_loss = total_eval_loss / len(test_loader)
+    print(f"Epoch {epoch+1}/{NUM_EPOCHS} | Validation Loss: {avg_eval_loss:.4f}")
+
+# Save results
+with open("transformer_model_result.txt", "w") as f:
+    for val in all_predictions:
+        f.write(f"{val}\n")
