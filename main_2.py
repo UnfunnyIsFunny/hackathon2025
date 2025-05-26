@@ -1,6 +1,6 @@
 if __name__ == '__main__':
     import pandas as pd
-    from sklearn.model_selection import train_test_split, KFold
+    from sklearn.model_selection import train_test_split
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import classification_report, confusion_matrix
 
@@ -11,7 +11,10 @@ if __name__ == '__main__':
     from torch.utils.data import Dataset, DataLoader
     from transformers import BertTokenizer, BertForSequenceClassification
     from torch.optim import AdamW
+    from sklearn.model_selection import StratifiedKFold
 
+    NUM_FOLDS = 5
+    skf = StratifiedKFold(n_splits=NUM_FOLDS, shuffle=True, random_state=42)
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -64,70 +67,72 @@ if __name__ == '__main__':
     train_dataset = ReviewDataset(X_train, y_train, tokenizer)
     test_dataset = ReviewDataset(X_test, y_test, tokenizer)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
-
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
 
     model = BertForSequenceClassification.from_pretrained(
         'bert-base-uncased',
         num_labels=len(set(y))
     ).to(DEVICE)
 
-    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
-    epochs_without_improvement = 0
-    patience = 5
-    best_val_loss = float('inf')
+    optimizer = AdamW(model.parameters(), lr=2e-5)
+
     model.train()
-    #kf = KFold(n_splits=10)
-    #kf.get_n_splits(train_loader)
 
-    for epoch in range(NUM_EPOCHS):
-        total_loss = 0
-        for batch in tqdm(train_loader, total=len(train_loader)):
-            input_ids = batch['input_ids'].to(DEVICE)
-            attention_mask = batch['attention_mask'].to(DEVICE)
-            labels = batch['labels'].to(DEVICE)
+    for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
 
-            optimizer.zero_grad()
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            loss = outputs.loss
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
 
-            total_loss += loss.item()
-        print(f"Epoch {epoch+1}: Training Loss = {total_loss / len(train_loader):.4f}")
+        train_dataset = ReviewDataset(X_train, y_train, tokenizer)
+        val_dataset = ReviewDataset(X_val, y_val, tokenizer)
 
-        # Validat
-        # ion
-        model.eval()
-        total_val_loss = 0
-        with torch.no_grad():
-            for batch in tqdm(test_loader, desc="Validating"):
+        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+        model = BertForSequenceClassification.from_pretrained(
+            'bert-base-uncased',
+            num_labels=len(set(y)),
+            hidden_dropout_prob=0.3  # Increase dropout
+        ).to(DEVICE)
+
+        optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
+
+        for epoch in range(NUM_EPOCHS):
+            model.train()
+            total_train_loss = 0
+            for batch in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
                 input_ids = batch['input_ids'].to(DEVICE)
                 attention_mask = batch['attention_mask'].to(DEVICE)
                 labels = batch['labels'].to(DEVICE)
 
+                optimizer.zero_grad()
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                total_val_loss += outputs.loss.item()
-                avg_val_loss = total_val_loss / len(test_loader)
-            print(f"Val Loss: {avg_val_loss:.4f}")
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
-                best_model_state = model.state_dict()
-                epochs_without_improvement = 0
-            else:
-                epochs_without_improvement += 1
-                if epochs_without_improvement >= patience:
-                    print(f"Early stopping triggered after {epoch + 1} epochs.")
-                    break
+                loss = outputs.loss
+                loss.backward()
+                optimizer.step()
+                total_train_loss += loss.item()
 
-    if best_model_state:
-        model.load_state_dict(best_model_state)
-        #print(f"Selected best Model with loss {best_val_loss}")
+            avg_train_loss = total_train_loss / len(train_loader)
+            print(f"Epoch {epoch+1} - Training Loss: {avg_train_loss:.4f}")
+
+            # Validation
+            model.eval()
+            total_val_loss = 0
+            with torch.no_grad():
+                for batch in tqdm(val_loader, desc="Validating"):
+                    input_ids = batch['input_ids'].to(DEVICE)
+                    attention_mask = batch['attention_mask'].to(DEVICE)
+                    labels = batch['labels'].to(DEVICE)
+
+                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                    total_val_loss += outputs.loss.item()
+
+        avg_val_loss = total_val_loss / len(val_loader)
+        print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+
     model.eval()
     predictions = []
-
     with torch.no_grad():
         for batch in tqdm(test_loader):
             input_ids = batch['input_ids'].to(DEVICE)
