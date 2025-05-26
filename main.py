@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix
 
 
-
+from torch.utils.data import Dataset
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -31,10 +31,11 @@ NUM_EPOCHS = 10  # TODO: Set the number of epochs
 
 data = pd.read_csv("eestec_hackathon_2025_train.tsv", sep='\t', names=['ID', 'Label', 'Statement', 'Subjects', 'Speaker Name', 'Speaker Title', 'State', 'Party Affiliation', 'Credit History: barely-true', 'Credit History: false', 'Credit History: half-true', 'Credit History: mostly-true', 'Credit History: pants-fire', 'Context/Location'])
 data = data.drop(data.columns[0], axis=1)
-y = data.iloc[:, 0]
+
+y = data.iloc[:1000, 0]
 
 # Remaining columns are input features
-X = data.iloc[:, 1:]
+X = data.iloc[:1000, 1:]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
@@ -72,7 +73,6 @@ class ReviewDataset(Dataset):
         item['labels'] = self.labels[index]
         return item
 
-import torch
 from torch.utils.data import Dataset
 import numpy as np # For label processing if needed
 
@@ -190,7 +190,7 @@ model = TransformerRegressor(MODEL_NAME, output_dim=1).to(DEVICE) # output_dim=1
 
 # TODO: Setup loss function, optimiser, and scheduler
 criterion = nn.L1Loss()
-optimiser = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimiser = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.01)
 
 scheduler = None
 
