@@ -17,25 +17,54 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 1  # TODO: Set the batch size according to both training performance and available memory
 NUM_EPOCHS = 10  # TODO: Set the number of epochs
 
-train_val = pd.read_csv("eestec_hackathon_2025_train.tsv", sep='\t')
-test_val = train_test_split(train_val, test_size=0.2)
-print(test_val)
-print(train_val)
+data = pd.read_csv("eestec_hackathon_2025_train.tsv", sep='\t', names=['ID', 'Label', 'Statement', 'Subjects', 'Speaker Name', 'Speaker Title', 'State', 'Party Affiliation', 'Credit History: barely-true', 'Credit History: false', 'Credit History: half-true', 'Credit History: mostly-true', 'Credit History: pants-fire', 'Context/Location'])
+data = data.drop(data.columns[0], axis=1)
+y = data.iloc[:, 0]
+
+# Remaining columns are input features
+X = data.iloc[:, 1:]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 # TODO: Fill out the ReviewDataset
 class ReviewDataset(Dataset):
     def __init__(self, data_frame):
-        pass
-
+         #self.id = data_frame['ID']
+         #self.label = data_frame['Label']
+         self.statement = data_frame['Statement']
+         self.subjects = data_frame['Subjects']
+         self.speaker_name = data_frame['Speaker Name']
+         self.speaker_title = data_frame['Speaker Title']
+         self.state = data_frame['State']
+         self.party_affiliation = data_frame['Party Affiliation']
+         self.credit_history_bt = data_frame['Credit History: barely-true']
+         self.credit_history_f = data_frame['Credit History: false']
+         self.credit_history_ht = data_frame['Credit History: half-true']
+         self.credit_history_mt = data_frame['Credit History: mostly-true']
+         self.credit_history_pf = data_frame['Credit History: pants-fire']
+         self.cl = data_frame['Context/Location']
     def __len__(self):
-        pass
+         return len(self.statement)
 
     def __getitem__(self, index):
-        pass
+        #label = self.label.iloc[index]
+        statement = self.statement.iloc[index]
+        subjects = self.subjects.iloc[index]
+        speaker_name = self.speaker_name.iloc[index]
+        speaker_title = self.speaker_title.iloc[index]
+        state = self.state.iloc[index]
+        party_affiliation = self.party_affiliation.iloc[index]
+        credit_history_bt = self.credit_history_bt.iloc[index]
+        credit_history_f = self.credit_history_f.iloc[index]
+        credit_history_ht = self.credit_history_ht.iloc[index]
+        credit_history_mt = self.credit_history_mt.iloc[index]
+        credit_history_pf = self.credit_history_pf.iloc[index]
+        cl = self.cl.iloc[index]
+        return statement, subjects, speaker_name, speaker_title, state, party_affiliation,credit_history_bt,credit_history_f,credit_history_ht,credit_history_mt,credit_history_pf,cl
 
 
-train_dataset = ReviewDataset(train_val)
-test_dataset = ReviewDataset(test_val)
+train_dataset = ReviewDataset(X_train)
+test_dataset = ReviewDataset(X_test)
 
 train_loader = DataLoader(dataset=train_dataset,
                           batch_size=BATCH_SIZE,
