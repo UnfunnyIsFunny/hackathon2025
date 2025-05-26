@@ -118,6 +118,7 @@ if __name__ == '__main__':
 
     if best_model_state:
         model.load_state_dict(best_model_state)
+        print(f"Selected best Model with loss {best_val_loss}")
     model.eval()
     predictions = []
 
