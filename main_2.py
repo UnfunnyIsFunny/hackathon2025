@@ -87,6 +87,7 @@ if __name__ == '__main__':
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             total_loss += loss.item()
@@ -118,7 +119,7 @@ if __name__ == '__main__':
 
     if best_model_state:
         model.load_state_dict(best_model_state)
-        print(f"Selected best Model with loss {best_val_loss}")
+        #print(f"Selected best Model with loss {best_val_loss}")
     model.eval()
     predictions = []
 
