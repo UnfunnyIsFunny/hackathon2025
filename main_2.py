@@ -213,6 +213,7 @@ if __name__ == '__main__':
 
     model.eval()
     predictions = []
+    total_val_loss = 0.0
     with torch.no_grad():
         for batch in tqdm(test_loader):
             input_ids = batch['input_ids'].to(DEVICE)
