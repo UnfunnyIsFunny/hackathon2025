@@ -78,10 +78,13 @@ if __name__ == '__main__':
     optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
     patience = 5
     best_val_loss = float('inf')
+    best_val_loss_fold = float('inf')
     epochs_without_improvement = 0
     best_model_state = None
 
+
     model.train()
+
 
     for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
 
@@ -99,11 +102,12 @@ if __name__ == '__main__':
             num_labels=len(set(y)),
             hidden_dropout_prob=0.3  # Increase dropout
         ).to(DEVICE)
-
+        best_val_loss = 0
 
         for epoch in range(NUM_EPOCHS):
             model.train()
             total_train_loss = 0
+            epochs_without_improvement = 0
             for batch in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
                 input_ids = batch['input_ids'].to(DEVICE)
                 attention_mask = batch['attention_mask'].to(DEVICE)
@@ -130,11 +134,14 @@ if __name__ == '__main__':
 
                     outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     total_val_loss += outputs.loss.item()
-
-            avg_val_loss = total_val_loss / len(val_loader)
-            print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+            avg_val_loss = total_val_loss / len(test_loader)
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
+
+
+            print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+            if best_val_loss < best_val_loss_fold:
+                best_val_loss = best_val_loss_fold
                 best_model_state = model.state_dict()
                 epochs_without_improvement = 0
             else:
