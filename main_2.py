@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
 
     if best_model_state:
-        print(f"Best validation loss was {best_val_loss}")
+        print(f"Best validation loss was {best_val_loss_fold}")
         model.load_state_dict(best_model_state)
 
     model.eval()
