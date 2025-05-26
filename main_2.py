@@ -127,7 +127,7 @@ if __name__ == '__main__':
         num_classes = len(train_dataset.label_map)  # Use num_classes from your dataset's label_map
         labels_for_weights = y_train.map(train_dataset.label_map)  # Map to indices
         class_sample_counts = torch.tensor(
-            [labels_for_weights[labels_for_weights == i].size(0) for i in range(num_classes)],
+            [labels_for_weights[labels_for_weights == i].size for i in range(num_classes)],
             dtype=torch.float
         )
 
