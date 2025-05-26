@@ -1,6 +1,6 @@
 if __name__ == '__main__':
     import pandas as pd
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import train_test_split, KFold
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import classification_report, confusion_matrix
 
@@ -11,6 +11,7 @@ if __name__ == '__main__':
     from torch.utils.data import Dataset, DataLoader
     from transformers import BertTokenizer, BertForSequenceClassification
     from torch.optim import AdamW
+
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -63,8 +64,9 @@ if __name__ == '__main__':
     train_dataset = ReviewDataset(X_train, y_train, tokenizer)
     test_dataset = ReviewDataset(X_test, y_test, tokenizer)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+
 
     model = BertForSequenceClassification.from_pretrained(
         'bert-base-uncased',
@@ -76,6 +78,9 @@ if __name__ == '__main__':
     patience = 5
     best_val_loss = float('inf')
     model.train()
+    #kf = KFold(n_splits=10)
+    #kf.get_n_splits(train_loader)
+
     for epoch in range(NUM_EPOCHS):
         total_loss = 0
         for batch in tqdm(train_loader, total=len(train_loader)):
