@@ -1,3 +1,5 @@
+import numpy
+
 if __name__ == '__main__':
     import pandas as pd
     from sklearn.model_selection import train_test_split
@@ -30,16 +32,33 @@ if __name__ == '__main__':
     data = data.drop(data.columns[0], axis=1)
     y = data.iloc[:2000, 0]
     X = data.iloc[:2000, 1:]
-    print("Full dataset y shape:", data['Label'].shape)  # Assuming 'data' is the full dataset
-    print("Full dataset label distribution:\n", data['Label'].value_counts(normalize=True) * 100)
+    # print("Full dataset y shape:", data['Label'].shape)  # Assuming 'data' is the full dataset
+    # print("Full dataset label distribution:\n", data['Label'].value_counts(normalize=True) * 100)
+    #
+    # # For the current 2000 sample slice:
+    # # y = data.iloc[:2000, 0]
+    # print("\nCurrently used y shape:", y.shape)
+    # print("Currently used y label distribution:\n", y.value_counts(normalize=True) * 100)
+    # print("Raw counts for currently used y:\n", y.value_counts())
+    col = X.iloc[:, 3]
+    #X.iloc[:, 3] = col.apply(lambda x: "Unknown speaker title" if x == numpy.nan else x)
 
-    # For the current 2000 sample slice:
-    # y = data.iloc[:2000, 0]
-    print("\nCurrently used y shape:", y.shape)
-    print("Currently used y label distribution:\n", y.value_counts(normalize=True) * 100)
-    print("Raw counts for currently used y:\n", y.value_counts())
+    X.iloc[:,3] = X.iloc[:, 3].fillna("unknown speaker title")
+
+
+    col = X.iloc[:, 5]
+
+    # Get value counts
+    value_counts = col.value_counts()
+
+    # Find values that appear at most 30 times
+    rare_values = value_counts[value_counts <= 20].index
+
+    # Replace those rare values with "rare"
+    X.iloc[:, 5] = col.apply(lambda x: "rare" if x in rare_values else x)
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    print(X.iloc[:, 3].value_counts())
 
     class ReviewDataset(Dataset):
         def __init__(self, df, labels, tokenizer, max_len=128):
