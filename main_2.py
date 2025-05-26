@@ -71,8 +71,10 @@ if __name__ == '__main__':
         num_labels=len(set(y))
     ).to(DEVICE)
 
-    optimizer = AdamW(model.parameters(), lr=2e-5)
-
+    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+    epochs_without_improvement = 0
+    patience = 5
+    best_val_loss = float('inf')
     model.train()
     for epoch in range(NUM_EPOCHS):
         total_loss = 0
@@ -90,7 +92,8 @@ if __name__ == '__main__':
             total_loss += loss.item()
         print(f"Epoch {epoch+1}: Training Loss = {total_loss / len(train_loader):.4f}")
 
-        # Validation
+        # Validat
+        # ion
         model.eval()
         total_val_loss = 0
         with torch.no_grad():
@@ -103,9 +106,21 @@ if __name__ == '__main__':
                 total_val_loss += outputs.loss.item()
                 avg_val_loss = total_val_loss / len(test_loader)
             print(f"Val Loss: {avg_val_loss:.4f}")
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_model_state = model.state_dict()
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    print(f"Early stopping triggered after {epoch + 1} epochs.")
+                    break
 
+    if best_model_state:
+        model.load_state_dict(best_model_state)
     model.eval()
     predictions = []
+
     with torch.no_grad():
         for batch in tqdm(test_loader):
             input_ids = batch['input_ids'].to(DEVICE)
