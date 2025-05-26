@@ -96,6 +96,13 @@ if __name__ == '__main__':
 
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+        model = BertForSequenceClassification.from_pretrained(
+            'bert-base-uncased',
+            num_labels=len(set(y)),
+            hidden_dropout_prob=0.1  # Increase dropout
+        ).to(DEVICE)
+
         optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
         total_steps = len(train_loader) * NUM_EPOCHS
         warmup_steps = int(0.1 * total_steps)
@@ -105,11 +112,6 @@ if __name__ == '__main__':
             num_training_steps=total_steps
 
         )
-        model = BertForSequenceClassification.from_pretrained(
-            'bert-base-uncased',
-            num_labels=len(set(y)),
-            hidden_dropout_prob=0.1  # Increase dropout
-        ).to(DEVICE)
         best_val_loss = float('inf')
 
         for epoch in range(NUM_EPOCHS):
