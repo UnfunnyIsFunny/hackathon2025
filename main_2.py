@@ -174,7 +174,7 @@ if __name__ == '__main__':
                 scheduler.step()
                 total_train_loss += loss.item()
 
-            avg_train_loss = total_train_loss / len(train_loader)
+            avg_train_loss = total_train_loss / len(val_loader)
             print(f"Epoch {epoch+1} - Training Loss: {avg_train_loss:.4f}")
 
             # Validation
