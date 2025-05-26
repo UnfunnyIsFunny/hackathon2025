@@ -223,7 +223,7 @@ if __name__ == '__main__':
             logits = outputs.logits
             preds = torch.argmax(logits, dim=1)
             predictions.extend(preds.cpu().numpy())
-    print(f"Test loss was {total_vas_los / len(test_loader)}")
+    print(f"Test loss was {total_val_loss / len(test_loader)}")
     with open("result.txt", "w") as f:
         for pred in predictions:
             f.write(f"{pred}\n")
