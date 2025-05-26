@@ -30,6 +30,14 @@ if __name__ == '__main__':
     data = data.drop(data.columns[0], axis=1)
     y = data.iloc[:2000, 0]
     X = data.iloc[:2000, 1:]
+    print("Full dataset y shape:", data['Label'].shape)  # Assuming 'data' is the full dataset
+    print("Full dataset label distribution:\n", data['Label'].value_counts(normalize=True) * 100)
+
+    # For the current 2000 sample slice:
+    # y = data.iloc[:2000, 0]
+    print("\nCurrently used y shape:", y.shape)
+    print("Currently used y label distribution:\n", y.value_counts(normalize=True) * 100)
+    print("Raw counts for currently used y:\n", y.value_counts())
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
