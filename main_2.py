@@ -9,7 +9,7 @@ if __name__ == '__main__':
     import torch
     import torch.nn as nn
     from torch.utils.data import Dataset, DataLoader
-    from transformers import BertTokenizer, BertForSequenceClassification
+    from transformers import BertTokenizer, BertForSequenceClassification, get_linear_schedule_with_warmup
     from torch.optim import AdamW
     from sklearn.model_selection import StratifiedKFold
 
@@ -76,12 +76,20 @@ if __name__ == '__main__':
     ).to(DEVICE)
 
     optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
+    total_steps = len(train_loader) * NUM_EPOCHS
+    warmup_steps = int(0.1 * total_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps
+
+    )
     patience = 5
     best_val_loss = float('inf')
     best_val_loss_fold = float('inf')
     epochs_without_improvement = 0
     best_model_state = None
-
+    criterion = nn.CrossEntropyLoss()
 
     model.train()
 
@@ -116,8 +124,10 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
+
                 loss.backward()
                 optimizer.step()
+                scheduler.step
                 total_train_loss += loss.item()
 
             avg_train_loss = total_train_loss / len(train_loader)
