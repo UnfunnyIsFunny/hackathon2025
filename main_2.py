@@ -1,19 +1,18 @@
 if __name__ == '__main__':
     import pandas as pd
     from sklearn.model_selection import train_test_split
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import classification_report, confusion_matrix
 
     import numpy as np
     from tqdm import tqdm
     import torch
     import torch.nn as nn
     from torch.utils.data import Dataset, DataLoader
-    from transformers import BertTokenizer, BertForSequenceClassification, get_linear_schedule_with_warmup
+    from transformers import BertTokenizer, BertForSequenceClassification
     from torch.optim import AdamW
     from sklearn.model_selection import StratifiedKFold
+    from transformers import get_linear_schedule_with_warmup
 
-    NUM_FOLDS = 5
+    NUM_FOLDS = 3
     skf = StratifiedKFold(n_splits=NUM_FOLDS, shuffle=True, random_state=42)
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -27,9 +26,10 @@ if __name__ == '__main__':
         'Credit History: barely-true', 'Credit History: false', 'Credit History: half-true',
         'Credit History: mostly-true', 'Credit History: pants-fire', 'Context/Location'
     ])
+    data = data.drop(data.columns[5], axis=1)
     data = data.drop(data.columns[0], axis=1)
-    y = data.iloc[:2000, 0]
-    X = data.iloc[:2000, 1:]
+    y = data.iloc[:120, 0]
+    X = data.iloc[:120, 1:]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         def __init__(self, df, labels, tokenizer, max_len=128):
             self.texts = [
                 f"{row['Statement']} [SEP] {row['Subjects']} [SEP] "
-                f"{row['Speaker Name']}, {row['Speaker Title']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
+                f"{row['Speaker Name']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
                 f"Context: {row['Context/Location']} [SEP] "
                 f"Credit: BT={row['Credit History: barely-true']}, F={row['Credit History: false']}, "
                 f"HT={row['Credit History: half-true']}, MT={row['Credit History: mostly-true']}, "
@@ -77,22 +77,19 @@ if __name__ == '__main__':
 
     optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
     total_steps = len(train_loader) * NUM_EPOCHS
-    warmup_steps = int(0.1 * total_steps)
+    warmup_steps = int(0.1 * total_steps)  # 10% warmup
+
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
         num_warmup_steps=warmup_steps,
         num_training_steps=total_steps
-
     )
     patience = 5
     best_val_loss = float('inf')
-    best_val_loss_fold = float('inf')
     epochs_without_improvement = 0
     best_model_state = None
-    criterion = nn.CrossEntropyLoss()
 
     model.train()
-
 
     for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
 
@@ -110,12 +107,12 @@ if __name__ == '__main__':
             num_labels=len(set(y)),
             hidden_dropout_prob=0.3  # Increase dropout
         ).to(DEVICE)
-        best_val_loss = 0
+
 
         for epoch in range(NUM_EPOCHS):
+            best_val_loss_per_fold = float('inf')
             model.train()
             total_train_loss = 0
-            epochs_without_improvement = 0
             for batch in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
                 input_ids = batch['input_ids'].to(DEVICE)
                 attention_mask = batch['attention_mask'].to(DEVICE)
@@ -124,7 +121,6 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                 loss = outputs.loss
-
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
@@ -144,27 +140,24 @@ if __name__ == '__main__':
 
                     outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     total_val_loss += outputs.loss.item()
-            avg_val_loss = total_val_loss / len(test_loader)
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
-                epochs_without_improvement = 0
 
+            avg_val_loss = total_val_loss / len(val_loader)
+            print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+            if avg_val_loss < best_val_loss:
+                best_model_state = model
+                best_val_loss_per_fold = avg_val_loss
+
+            if avg_val_loss < best_val_loss_per_fold:
+                best_val_loss_per_fold = avg_val_loss
+                epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
                 if epochs_without_improvement >= patience:
                     print(f"Early stopping triggered after {epoch + 1} epochs.")
                     break
 
-
-        print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
-        if best_val_loss < best_val_loss_fold:
-            best_val_loss_fold = best_val_loss
-            best_model_state = model.state_dict()
-
-
     if best_model_state:
-        print(f"Best validation loss was {best_val_loss_fold}")
-        model.load_state_dict(best_model_state)
+        print(f"Best validation loss was {best_val_loss}")
 
     model.eval()
     predictions = []
