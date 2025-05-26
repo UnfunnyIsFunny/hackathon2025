@@ -61,7 +61,7 @@ if __name__ == '__main__':
     print(X.iloc[:, 3].value_counts())
 
     class ReviewDataset(Dataset):
-        def __init__(self, df, labels, tokenizer, max_len=128):
+        def __init__(self, df, labels, tokenizer, max_len=256):
             self.texts = [
                 f"{row['Statement']} [SEP] {row['Subjects']} [SEP] "
                 f"{row['Speaker Name']}, {row['Speaker Title']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
@@ -174,7 +174,7 @@ if __name__ == '__main__':
                 scheduler.step()
                 total_train_loss += loss.item()
 
-            avg_train_loss = total_train_loss / len(val_loader)
+            avg_train_loss = total_train_loss / len(train_loader)
             print(f"Epoch {epoch+1} - Training Loss: {avg_train_loss:.4f}")
 
             # Validation
@@ -220,11 +220,11 @@ if __name__ == '__main__':
             attention_mask = batch['attention_mask'].to(DEVICE)
 
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            total_val_loss += outputs.loss.item()
+            #total_val_loss += outputs.loss.item()
             logits = outputs.logits
             preds = torch.argmax(logits, dim=1)
             predictions.extend(preds.cpu().numpy())
-    print(f"Test loss was {total_val_loss / len(test_loader)}")
+    #print(f"Test loss was {total_val_loss / len(test_loader)}")
     with open("result.txt", "w") as f:
         for pred in predictions:
             f.write(f"{pred}\n")
