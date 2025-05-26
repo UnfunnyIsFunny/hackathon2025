@@ -64,11 +64,11 @@ if __name__ == '__main__':
         def __init__(self, df, labels, tokenizer, max_len=256):
             self.texts = [
                 f"{row['Statement']} [SEP] {row['Subjects']} [SEP] "
-                f"{row['Speaker Name']}, {row['Speaker Title']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
-                f"Context: {row['Context/Location']} [SEP] "
-                f"Credit: BT={row['Credit History: barely-true']}, F={row['Credit History: false']}, "
-                f"HT={row['Credit History: half-true']}, MT={row['Credit History: mostly-true']}, "
-                f"PF={row['Credit History: pants-fire']}"
+                #f"{row['Speaker Name']}, {row['Speaker Title']} from {row['State']} affiliated with {row['Party Affiliation']} [SEP] "
+                #f"Context: {row['Context/Location']} [SEP] "
+                #f"Credit: BT={row['Credit History: barely-true']}, F={row['Credit History: false']}, "
+                #f"HT={row['Credit History: half-true']}, MT={row['Credit History: mostly-true']}, "
+                #f"PF={row['Credit History: pants-fire']}"
                 for _, row in df.iterrows()
             ]
 
