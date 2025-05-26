@@ -137,18 +137,20 @@ if __name__ == '__main__':
             avg_val_loss = total_val_loss / len(test_loader)
             if avg_val_loss < best_val_loss:
                 best_val_loss = avg_val_loss
-
-
-            print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
-            if best_val_loss < best_val_loss_fold:
-                best_val_loss = best_val_loss_fold
-                best_model_state = model.state_dict()
                 epochs_without_improvement = 0
+
             else:
                 epochs_without_improvement += 1
                 if epochs_without_improvement >= patience:
                     print(f"Early stopping triggered after {epoch + 1} epochs.")
                     break
+
+
+        print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+        if best_val_loss < best_val_loss_fold:
+            best_val_loss_fold = best_val_loss
+            best_model_state = model.state_dict()
+
 
     if best_model_state:
         print(f"Best validation loss was {best_val_loss}")
