@@ -75,7 +75,11 @@ if __name__ == '__main__':
         num_labels=len(set(y))
     ).to(DEVICE)
 
-    optimizer = AdamW(model.parameters(), lr=2e-5)
+    optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
+    patience = 5
+    best_val_loss = float('inf')
+    epochs_without_improvement = 0
+    best_model_state = None
 
     model.train()
 
@@ -96,7 +100,6 @@ if __name__ == '__main__':
             hidden_dropout_prob=0.3  # Increase dropout
         ).to(DEVICE)
 
-        optimizer = AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)  # Add weight decay
 
         for epoch in range(NUM_EPOCHS):
             model.train()
@@ -128,8 +131,21 @@ if __name__ == '__main__':
                     outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
                     total_val_loss += outputs.loss.item()
 
-        avg_val_loss = total_val_loss / len(val_loader)
-        print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+            avg_val_loss = total_val_loss / len(val_loader)
+            print(f"Epoch {epoch+1} - Validation Loss: {avg_val_loss:.4f}")
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+                best_model_state = model.state_dict()
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                if epochs_without_improvement >= patience:
+                    print(f"Early stopping triggered after {epoch + 1} epochs.")
+                    break
+
+    if best_model_state:
+        print(f"Best validation loss was {best_val_loss}")
+        model.load_state_dict(best_model_state)
 
     model.eval()
     predictions = []
